@@ -13,6 +13,11 @@ class RaylibWindow extends addon.RaylibWindow {
     this.setTargetFPS(60);
 
     while (!this.windowShouldClose()) {
+      // perhaps this should be exposed to the callers?
+      if (this.isKeyPressed(RaylibWindow.KEY_Q)) {
+        RaylibWindow.closeWindow();
+      }
+
       this.beginDrawing();
 
       if (updateCallback) {
@@ -31,5 +36,7 @@ RaylibWindow.WHITE = { r: 255, g: 255, b: 255, a: 255 };
 RaylibWindow.RED = { r: 255, g: 0, b: 0, a: 255 };
 RaylibWindow.GREEN = { r: 0, g: 255, b: 0, a: 255 };
 RaylibWindow.BLUE = { r: 0, g: 0, b: 255, a: 255 };
+
+RaylibWindow.KEY_Q = 81;
 
 module.exports = RaylibWindow;

@@ -20,6 +20,7 @@ class RaylibWindow : public Napi::ObjectWrap<RaylibWindow> {
          InstanceMethod("windowShouldClose", &RaylibWindow::WindowShouldClose),
          InstanceMethod("beginDrawing", &RaylibWindow::BeginDrawing),
          InstanceMethod("endDrawing", &RaylibWindow::EndDrawing),
+         InstanceMethod("isKeyPressed", &RaylibWindow::IsKeyPressed),
          InstanceMethod("clearBackground", &RaylibWindow::ClearBackground),
          InstanceMethod("drawText", &RaylibWindow::DrawText),
          InstanceMethod("setTargetFPS", &RaylibWindow::SetTargetFPS),
@@ -80,6 +81,19 @@ class RaylibWindow : public Napi::ObjectWrap<RaylibWindow> {
   Napi::Value IsWindowReady(const Napi::CallbackInfo& info) {
     Napi::Env env = info.Env();
     return Napi::Boolean::New(env, ::IsWindowReady());
+  }
+
+  Napi::Value IsKeyPressed(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+
+    if (info.Length() < 1) {
+      Napi::TypeError::New(env, "Expected 1 argument")
+          .ThrowAsJavaScriptException();
+      return env.Null();
+    }
+
+    int key = info[0].As<Napi::Number>().Int32Value();
+    return Napi::Boolean::New(env, ::IsKeyPressed(key));
   }
 
   Napi::Value WindowShouldClose(const Napi::CallbackInfo& info) {
