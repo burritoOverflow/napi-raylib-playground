@@ -1,0 +1,16 @@
+{
+  "name": "raylib-demo-addon",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "build": "node-gyp rebuild --verbose",
+    "clean": "node-gyp clean",
+    "build:commands": "npm run clean && bear -- node-gyp rebuild --verbose"
+  },
+  "dependencies": {
+    "node-addon-api": "^7.0.0"
+  },
+  "devDependencies": {
+    "node-gyp": "^9.0.0"
+  }
+}
