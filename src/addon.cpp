@@ -5,27 +5,30 @@
 #include <thread>
 
 Color NapiObjectToColor(const Napi::Object& obj) {
-  Color color = {(unsigned char)obj.Get("r").As<Napi::Number>().Uint32Value(),
-                 (unsigned char)obj.Get("g").As<Napi::Number>().Uint32Value(),
-                 (unsigned char)obj.Get("b").As<Napi::Number>().Uint32Value(),
-                 (unsigned char)obj.Get("a").As<Napi::Number>().Uint32Value()};
+  const Color color = {
+      (unsigned char)obj.Get("r").As<Napi::Number>().Uint32Value(),
+      (unsigned char)obj.Get("g").As<Napi::Number>().Uint32Value(),
+      (unsigned char)obj.Get("b").As<Napi::Number>().Uint32Value(),
+      (unsigned char)obj.Get("a").As<Napi::Number>().Uint32Value()};
   return color;
 }
 
 Vector3 NapiObjectToVector3(const Napi::Object& obj) {
-  Vector3 vec = {obj.Get("x").As<Napi::Number>().FloatValue(),
-                 obj.Get("y").As<Napi::Number>().FloatValue(),
-                 obj.Get("z").As<Napi::Number>().FloatValue()};
+  const Vector3 vec = {obj.Get("x").As<Napi::Number>().FloatValue(),
+                       obj.Get("y").As<Napi::Number>().FloatValue(),
+                       obj.Get("z").As<Napi::Number>().FloatValue()};
   return vec;
 }
 
 Camera3D NapiObjectToCamera3D(const Napi::Object& obj) {
   Camera3D camera;
+
   camera.position = NapiObjectToVector3(obj.Get("position").As<Napi::Object>());
   camera.target = NapiObjectToVector3(obj.Get("target").As<Napi::Object>());
   camera.up = NapiObjectToVector3(obj.Get("up").As<Napi::Object>());
   camera.fovy = obj.Get("fovy").As<Napi::Number>().FloatValue();
   camera.projection = obj.Get("projection").As<Napi::Number>().Int32Value();
+
   return camera;
 }
 
@@ -93,15 +96,10 @@ Napi::Value BindEndDrawing(const Napi::CallbackInfo& info) {
 Napi::Value BindClearBackground(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
-  // Default to black if no color provided
-  Color color = BLACK;
-
+  Color color;
   if (info.Length() >= 1 && info[0].IsObject()) {
     Napi::Object colorObj = info[0].As<Napi::Object>();
-    color.r = colorObj.Get("r").As<Napi::Number>().Uint32Value();
-    color.g = colorObj.Get("g").As<Napi::Number>().Uint32Value();
-    color.b = colorObj.Get("b").As<Napi::Number>().Uint32Value();
-    color.a = colorObj.Get("a").As<Napi::Number>().Uint32Value();
+    color = NapiObjectToColor(colorObj);
   }
 
   ::ClearBackground(color);
@@ -178,6 +176,57 @@ Napi::Value BindEndMode3D(const Napi::CallbackInfo& info) {
   return env.Undefined();
 }
 
+Napi::Value BindUpdateCamera(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+
+  if (info.Length() < 2) {
+    Napi::TypeError::New(env, "Expected 2 arguments: camera object and mode")
+        .ThrowAsJavaScriptException();
+    return env.Null();
+  }
+
+  if (!info[0].IsObject()) {
+    Napi::TypeError::New(env, "Expected a camera object")
+        .ThrowAsJavaScriptException();
+    return env.Null();
+  }
+
+  if (!info[1].IsNumber()) {
+    Napi::TypeError::New(env, "Expected a number for camera mode")
+        .ThrowAsJavaScriptException();
+    return env.Null();
+  }
+
+  Napi::Object cameraObj = info[0].As<Napi::Object>();
+  Camera3D camera = NapiObjectToCamera3D(cameraObj);
+  const int cameraMode = info[1].As<Napi::Number>().Int32Value();
+  ::UpdateCamera(&camera, cameraMode);
+
+  // Update the JS object with the new camera state
+  cameraObj.Set("position", Napi::Object::New(env));
+  cameraObj.Get("position").As<Napi::Object>().Set("x", camera.position.x);
+  cameraObj.Get("position").As<Napi::Object>().Set("y", camera.position.y);
+  cameraObj.Get("position").As<Napi::Object>().Set("z", camera.position.z);
+
+  return env.Undefined();
+}
+
+Napi::Value BindDrawGrid(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+
+  if (info.Length() < 2) {
+    Napi::TypeError::New(env, "Expected 2 arguments: slices and spacing")
+        .ThrowAsJavaScriptException();
+    return env.Null();
+  }
+
+  const int slices = info[0].As<Napi::Number>().Int32Value();
+  const float spacing = info[1].As<Napi::Number>().FloatValue();
+
+  ::DrawGrid(slices, spacing);
+  return env.Undefined();
+}
+
 Napi::Value BindMeasureText(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
@@ -187,6 +236,7 @@ Napi::Value BindMeasureText(const Napi::CallbackInfo& info) {
     return env.Null();
   }
 
+  // TODO: validate input types?
   const std::string text = info[0].As<Napi::String>().Utf8Value();
   const int fontSize = info[1].As<Napi::Number>().Int32Value();
 
@@ -226,6 +276,8 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
   exports.Set("drawCube", Napi::Function::New(env, BindDrawCube));
   exports.Set("beginMode3D", Napi::Function::New(env, BindBeginMode3D));
   exports.Set("endMode3D", Napi::Function::New(env, BindEndMode3D));
+  exports.Set("updateCamera", Napi::Function::New(env, BindUpdateCamera));
+  exports.Set("drawGrid", Napi::Function::New(env, BindDrawGrid));
 
   return exports;
 }
