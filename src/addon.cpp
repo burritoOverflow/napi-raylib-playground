@@ -4,264 +4,230 @@
 #include <atomic>
 #include <thread>
 
-class RaylibWindow : public Napi::ObjectWrap<RaylibWindow> {
- private:
-  bool windowInitialized{false};
+Color NapiObjectToColor(const Napi::Object& obj) {
+  Color color = {(unsigned char)obj.Get("r").As<Napi::Number>().Uint32Value(),
+                 (unsigned char)obj.Get("g").As<Napi::Number>().Uint32Value(),
+                 (unsigned char)obj.Get("b").As<Napi::Number>().Uint32Value(),
+                 (unsigned char)obj.Get("a").As<Napi::Number>().Uint32Value()};
+  return color;
+}
 
- public:
-  static Napi::Object Init(Napi::Env env, Napi::Object exports) {
-    Napi::HandleScope scope(env);
+Vector3 NapiObjectToVector3(const Napi::Object& obj) {
+  Vector3 vec = {obj.Get("x").As<Napi::Number>().FloatValue(),
+                 obj.Get("y").As<Napi::Number>().FloatValue(),
+                 obj.Get("z").As<Napi::Number>().FloatValue()};
+  return vec;
+}
 
-    Napi::Function func = DefineClass(
-        env, "RaylibWindow",
-        {InstanceMethod("initWindow", &RaylibWindow::InitWindow),
-         InstanceMethod("closeWindow", &RaylibWindow::CloseWindow),
-         InstanceMethod("isWindowReady", &RaylibWindow::IsWindowReady),
-         InstanceMethod("windowShouldClose", &RaylibWindow::WindowShouldClose),
-         InstanceMethod("beginDrawing", &RaylibWindow::BeginDrawing),
-         InstanceMethod("endDrawing", &RaylibWindow::EndDrawing),
-         InstanceMethod("isKeyPressed", &RaylibWindow::IsKeyPressed),
-         InstanceMethod("clearBackground", &RaylibWindow::ClearBackground),
-         InstanceMethod("drawText", &RaylibWindow::DrawText),
-         InstanceMethod("setTargetFPS", &RaylibWindow::SetTargetFPS),
-         InstanceMethod("measureText", &RaylibWindow::MeasureText),
-         InstanceMethod("drawCube", &RaylibWindow::DrawCube),
-         InstanceMethod("beginMode3D", &RaylibWindow::BeginMode3D),
-         InstanceMethod("endMode3D", &RaylibWindow::EndMode3D)});
+Camera3D NapiObjectToCamera3D(const Napi::Object& obj) {
+  Camera3D camera;
+  camera.position = NapiObjectToVector3(obj.Get("position").As<Napi::Object>());
+  camera.target = NapiObjectToVector3(obj.Get("target").As<Napi::Object>());
+  camera.up = NapiObjectToVector3(obj.Get("up").As<Napi::Object>());
+  camera.fovy = obj.Get("fovy").As<Napi::Number>().FloatValue();
+  camera.projection = obj.Get("projection").As<Napi::Number>().Int32Value();
+  return camera;
+}
 
-    Napi::FunctionReference* constructor = new Napi::FunctionReference();
-    *constructor = Napi::Persistent(func);
-    env.SetInstanceData(constructor);
+Napi::Value BindInitWindow(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
 
-    exports.Set("RaylibWindow", func);
-    return exports;
+  if (info.Length() < 3) {
+    Napi::TypeError::New(env, "Expected 3 arguments")
+        .ThrowAsJavaScriptException();
+    return env.Null();
   }
 
-  RaylibWindow(const Napi::CallbackInfo& info)
-      : Napi::ObjectWrap<RaylibWindow>(info) {
-    Napi::Env env = info.Env();
-    Napi::HandleScope scope(env);
+  const int width = info[0].As<Napi::Number>().Int32Value();
+  const int height = info[1].As<Napi::Number>().Int32Value();
+  const std::string title = info[2].As<Napi::String>().Utf8Value();
+
+  ::InitWindow(width, height, title.c_str());
+
+  return env.Undefined();
+}
+
+Napi::Value BindCloseWindow(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (::IsWindowReady()) {
+    ::CloseWindow();
+  }
+  return env.Undefined();
+}
+
+Napi::Value BindIsWindowReady(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  return Napi::Boolean::New(env, ::IsWindowReady());
+}
+
+Napi::Value BindIsKeyPressed(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+
+  if (info.Length() < 1) {
+    Napi::TypeError::New(env, "Expected 1 argument")
+        .ThrowAsJavaScriptException();
+    return env.Null();
   }
 
-  ~RaylibWindow() {
-    if (windowInitialized && ::IsWindowReady()) {
-      ::CloseWindow();
-      windowInitialized = false;
-    }
+  int key = info[0].As<Napi::Number>().Int32Value();
+  return Napi::Boolean::New(env, ::IsKeyPressed(key));
+}
+
+Napi::Value BindWindowShouldClose(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  return Napi::Boolean::New(env, ::WindowShouldClose());
+}
+
+Napi::Value BindBeginDrawing(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  ::BeginDrawing();
+  return env.Undefined();
+}
+
+Napi::Value BindEndDrawing(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  ::EndDrawing();
+  return env.Undefined();
+}
+
+Napi::Value BindClearBackground(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+
+  // Default to black if no color provided
+  Color color = BLACK;
+
+  if (info.Length() >= 1 && info[0].IsObject()) {
+    Napi::Object colorObj = info[0].As<Napi::Object>();
+    color.r = colorObj.Get("r").As<Napi::Number>().Uint32Value();
+    color.g = colorObj.Get("g").As<Napi::Number>().Uint32Value();
+    color.b = colorObj.Get("b").As<Napi::Number>().Uint32Value();
+    color.a = colorObj.Get("a").As<Napi::Number>().Uint32Value();
   }
 
-  Napi::Value InitWindow(const Napi::CallbackInfo& info) {
-    Napi::Env env = info.Env();
+  ::ClearBackground(color);
+  return env.Undefined();
+}
 
-    if (info.Length() < 3) {
-      Napi::TypeError::New(env, "Expected 3 arguments")
-          .ThrowAsJavaScriptException();
-      return env.Null();
-    }
+Napi::Value BindDrawText(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
 
-    const int width = info[0].As<Napi::Number>().Int32Value();
-    const int height = info[1].As<Napi::Number>().Int32Value();
-    const std::string title = info[2].As<Napi::String>().Utf8Value();
-
-    ::InitWindow(width, height, title.c_str());
-    windowInitialized = true;
-
-    return env.Undefined();
+  if (info.Length() < 5) {
+    Napi::TypeError::New(env, "Expected 5 arguments")
+        .ThrowAsJavaScriptException();
+    return env.Null();
   }
 
-  Napi::Value CloseWindow(const Napi::CallbackInfo& info) {
-    Napi::Env env = info.Env();
-    if (windowInitialized && ::IsWindowReady()) {
-      ::CloseWindow();
-      windowInitialized = false;
-    }
-    return env.Undefined();
-  }
+  std::string text = info[0].As<Napi::String>().Utf8Value();
+  int posX = info[1].As<Napi::Number>().Int32Value();
+  int posY = info[2].As<Napi::Number>().Int32Value();
+  int fontSize = info[3].As<Napi::Number>().Int32Value();
 
-  Napi::Value IsWindowReady(const Napi::CallbackInfo& info) {
-    Napi::Env env = info.Env();
-    return Napi::Boolean::New(env, ::IsWindowReady());
-  }
+  Color color;
 
-  Napi::Value IsKeyPressed(const Napi::CallbackInfo& info) {
-    Napi::Env env = info.Env();
-
-    if (info.Length() < 1) {
-      Napi::TypeError::New(env, "Expected 1 argument")
-          .ThrowAsJavaScriptException();
-      return env.Null();
-    }
-
-    int key = info[0].As<Napi::Number>().Int32Value();
-    return Napi::Boolean::New(env, ::IsKeyPressed(key));
-  }
-
-  Napi::Value WindowShouldClose(const Napi::CallbackInfo& info) {
-    Napi::Env env = info.Env();
-    return Napi::Boolean::New(env, ::WindowShouldClose());
-  }
-
-  Napi::Value BeginDrawing(const Napi::CallbackInfo& info) {
-    Napi::Env env = info.Env();
-    ::BeginDrawing();
-    return env.Undefined();
-  }
-
-  Napi::Value EndDrawing(const Napi::CallbackInfo& info) {
-    Napi::Env env = info.Env();
-    ::EndDrawing();
-    return env.Undefined();
-  }
-
-  Napi::Value ClearBackground(const Napi::CallbackInfo& info) {
-    Napi::Env env = info.Env();
-
-    // Default to black if no color provided
-    Color color = BLACK;
-
-    if (info.Length() >= 1 && info[0].IsObject()) {
-      Napi::Object colorObj = info[0].As<Napi::Object>();
-      color.r = colorObj.Get("r").As<Napi::Number>().Uint32Value();
-      color.g = colorObj.Get("g").As<Napi::Number>().Uint32Value();
-      color.b = colorObj.Get("b").As<Napi::Number>().Uint32Value();
-      color.a = colorObj.Get("a").As<Napi::Number>().Uint32Value();
-    }
-
-    ::ClearBackground(color);
-    return env.Undefined();
-  }
-
-  Napi::Value DrawText(const Napi::CallbackInfo& info) {
-    Napi::Env env = info.Env();
-
-    if (info.Length() < 5) {
-      Napi::TypeError::New(env, "Expected 5 arguments")
-          .ThrowAsJavaScriptException();
-      return env.Null();
-    }
-
-    std::string text = info[0].As<Napi::String>().Utf8Value();
-    int posX = info[1].As<Napi::Number>().Int32Value();
-    int posY = info[2].As<Napi::Number>().Int32Value();
-    int fontSize = info[3].As<Napi::Number>().Int32Value();
-
-    Color color = WHITE;
-    if (info[4].IsObject()) {
-      Napi::Object colorObj = info[4].As<Napi::Object>();
-      color.r = colorObj.Get("r").As<Napi::Number>().Uint32Value();
-      color.g = colorObj.Get("g").As<Napi::Number>().Uint32Value();
-      color.b = colorObj.Get("b").As<Napi::Number>().Uint32Value();
-      color.a = colorObj.Get("a").As<Napi::Number>().Uint32Value();
-    }
-
-    ::DrawText(text.c_str(), posX, posY, fontSize, color);
-    return env.Undefined();
-  }
-
-  Napi::Value DrawCube(const Napi::CallbackInfo& info) {
-    Napi::Env env = info.Env();
-
-    if (info.Length() < 5) {
-      Napi::TypeError::New(env, "Expected 5 arguments")
-          .ThrowAsJavaScriptException();
-      return env.Null();
-    }
-
-    Napi::Object posObj = info[0].As<Napi::Object>();
-
-    Vector3 position = {posObj.Get("x").As<Napi::Number>().FloatValue(),
-                        posObj.Get("y").As<Napi::Number>().FloatValue(),
-                        posObj.Get("z").As<Napi::Number>().FloatValue()};
-
-    float width = info[1].As<Napi::Number>().FloatValue();
-    float height = info[2].As<Napi::Number>().FloatValue();
-    float depth = info[3].As<Napi::Number>().FloatValue();
-
+  if (info[4].IsObject()) {
     Napi::Object colorObj = info[4].As<Napi::Object>();
-    Color color = {
-        (unsigned char)colorObj.Get("r").As<Napi::Number>().Uint32Value(),
-        (unsigned char)colorObj.Get("g").As<Napi::Number>().Uint32Value(),
-        (unsigned char)colorObj.Get("b").As<Napi::Number>().Uint32Value(),
-        (unsigned char)colorObj.Get("a").As<Napi::Number>().Uint32Value()};
-
-    ::DrawCube(position, width, height, depth, color);
-    return env.Undefined();
+    color = NapiObjectToColor(colorObj);
   }
 
-  Napi::Value BeginMode3D(const Napi::CallbackInfo& info) {
-    Napi::Env env = info.Env();
+  ::DrawText(text.c_str(), posX, posY, fontSize, color);
+  return env.Undefined();
+}
 
-    if (info.Length() < 1 || !info[0].IsObject()) {
-      Napi::TypeError::New(env, "Expected a camera object")
-          .ThrowAsJavaScriptException();
-      return env.Null();
-    }
+Napi::Value BindDrawCube(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
 
-    Napi::Object cameraObj = info[0].As<Napi::Object>();
-    Napi::Object posObj = cameraObj.Get("position").As<Napi::Object>();
-    Napi::Object targetObj = cameraObj.Get("target").As<Napi::Object>();
-    Napi::Object upObj = cameraObj.Get("up").As<Napi::Object>();
-    float fovy = cameraObj.Get("fovy").As<Napi::Number>().FloatValue();
-    int projection =
-        (int)cameraObj.Get("projection").As<Napi::Number>().Int32Value();
-
-    Vector3 position = {posObj.Get("x").As<Napi::Number>().FloatValue(),
-                        posObj.Get("y").As<Napi::Number>().FloatValue(),
-                        posObj.Get("z").As<Napi::Number>().FloatValue()};
-
-    Vector3 target = {targetObj.Get("x").As<Napi::Number>().FloatValue(),
-                      targetObj.Get("y").As<Napi::Number>().FloatValue(),
-                      targetObj.Get("z").As<Napi::Number>().FloatValue()};
-
-    Vector3 up = {upObj.Get("x").As<Napi::Number>().FloatValue(),
-                  upObj.Get("y").As<Napi::Number>().FloatValue(),
-                  upObj.Get("z").As<Napi::Number>().FloatValue()};
-
-    Camera3D camera = {position, target, up, fovy, projection};
-
-    ::BeginMode3D(camera);
-    return env.Undefined();
+  if (info.Length() < 5) {
+    Napi::TypeError::New(env, "Expected 5 arguments")
+        .ThrowAsJavaScriptException();
+    return env.Null();
   }
 
-  Napi::Value EndMode3D(const Napi::CallbackInfo& info) {
-    Napi::Env env = info.Env();
-    ::EndMode3D();
-    return env.Undefined();
+  Napi::Object posObj = info[0].As<Napi::Object>();
+  Vector3 position = NapiObjectToVector3(posObj);
+
+  float width = info[1].As<Napi::Number>().FloatValue();
+  float height = info[2].As<Napi::Number>().FloatValue();
+  float depth = info[3].As<Napi::Number>().FloatValue();
+
+  Napi::Object colorObj = info[4].As<Napi::Object>();
+  Color color = NapiObjectToColor(colorObj);
+
+  ::DrawCube(position, width, height, depth, color);
+  return env.Undefined();
+}
+
+Napi::Value BindBeginMode3D(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+
+  if (info.Length() < 1 || !info[0].IsObject()) {
+    Napi::TypeError::New(env, "Expected a camera object")
+        .ThrowAsJavaScriptException();
+    return env.Null();
   }
 
-  Napi::Value MeasureText(const Napi::CallbackInfo& info) {
-    Napi::Env env = info.Env();
+  Napi::Object cameraObj = info[0].As<Napi::Object>();
+  Camera3D camera = NapiObjectToCamera3D(cameraObj);
 
-    if (info.Length() < 2) {
-      Napi::TypeError::New(env, "Expected 2 arguments")
-          .ThrowAsJavaScriptException();
-      return env.Null();
-    }
+  ::BeginMode3D(camera);
+  return env.Undefined();
+}
 
-    const std::string text = info[0].As<Napi::String>().Utf8Value();
-    const int fontSize = info[1].As<Napi::Number>().Int32Value();
+Napi::Value BindEndMode3D(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  ::EndMode3D();
+  return env.Undefined();
+}
 
-    const int width = ::MeasureText(text.c_str(), fontSize);
-    return Napi::Number::New(env, width);
+Napi::Value BindMeasureText(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+
+  if (info.Length() < 2) {
+    Napi::TypeError::New(env, "Expected 2 arguments")
+        .ThrowAsJavaScriptException();
+    return env.Null();
   }
 
-  Napi::Value SetTargetFPS(const Napi::CallbackInfo& info) {
-    Napi::Env env = info.Env();
+  const std::string text = info[0].As<Napi::String>().Utf8Value();
+  const int fontSize = info[1].As<Napi::Number>().Int32Value();
 
-    if (info.Length() < 1) {
-      Napi::TypeError::New(env, "Expected 1 argument")
-          .ThrowAsJavaScriptException();
-      return env.Null();
-    }
+  const int width = ::MeasureText(text.c_str(), fontSize);
+  return Napi::Number::New(env, width);
+}
 
-    const int fps = info[0].As<Napi::Number>().Int32Value();
-    ::SetTargetFPS(fps);
-    return env.Undefined();
+Napi::Value BindSetTargetFPS(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+
+  if (info.Length() < 1) {
+    Napi::TypeError::New(env, "Expected 1 argument")
+        .ThrowAsJavaScriptException();
+    return env.Null();
   }
+
+  const int fps = info[0].As<Napi::Number>().Int32Value();
+  ::SetTargetFPS(fps);
+  return env.Undefined();
 };
 
 Napi::Object Init(Napi::Env env, Napi::Object exports) {
-  return RaylibWindow::Init(env, exports);
+  Napi::HandleScope scope(env);
+
+  exports.Set("initWindow", Napi::Function::New(env, BindInitWindow));
+  exports.Set("closeWindow", Napi::Function::New(env, BindCloseWindow));
+  exports.Set("isWindowReady", Napi::Function::New(env, BindIsWindowReady));
+  exports.Set("windowShouldClose",
+              Napi::Function::New(env, BindWindowShouldClose));
+  exports.Set("beginDrawing", Napi::Function::New(env, BindBeginDrawing));
+  exports.Set("endDrawing", Napi::Function::New(env, BindEndDrawing));
+  exports.Set("isKeyPressed", Napi::Function::New(env, BindIsKeyPressed));
+  exports.Set("clearBackground", Napi::Function::New(env, BindClearBackground));
+  exports.Set("drawText", Napi::Function::New(env, BindDrawText));
+  exports.Set("setTargetFPS", Napi::Function::New(env, BindSetTargetFPS));
+  exports.Set("measureText", Napi::Function::New(env, BindMeasureText));
+  exports.Set("drawCube", Napi::Function::New(env, BindDrawCube));
+  exports.Set("beginMode3D", Napi::Function::New(env, BindBeginMode3D));
+  exports.Set("endMode3D", Napi::Function::New(env, BindEndMode3D));
+
+  return exports;
 }
 
 NODE_API_MODULE(raylib_addon, Init)

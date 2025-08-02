@@ -1,58 +1,52 @@
-const RaylibWindow = require("./index");
+const raylib = require("./build/Release/raylib_addon");
 
-async function main() {
-  let window;
+BLACK = { r: 0, g: 0, b: 0, a: 255 };
+WHITE = { r: 255, g: 255, b: 255, a: 255 };
+RED = { r: 255, g: 0, b: 0, a: 255 };
+GREEN = { r: 0, g: 255, b: 0, a: 255 };
+BLUE = { r: 0, g: 0, b: 255, a: 255 };
+KEY_Q = 81;
 
-  try {
-    window = new RaylibWindow();
-  } catch (error) {
-    console.error(`Failed to create window: ${error.message}`);
-    return;
+const width = 1920;
+const height = 1080;
+
+raylib.initWindow(width, height, "Hello Raylib from Node.js");
+raylib.setTargetFPS(60);
+
+const camera = {
+  position: { x: 5.0, y: 5.0, z: 5.0 },
+  target: { x: 0.0, y: 0.0, z: 0.0 },
+  up: { x: 0.0, y: 1.0, z: 0.0 },
+  fovy: 45.0,
+  projection: 0, // CAMERA_PERSPECTIVE
+};
+
+while (!raylib.windowShouldClose()) {
+  // perhaps this should be exposed to the callers?
+  if (raylib.isKeyPressed(KEY_Q)) {
+    raylib.closeWindow();
   }
 
-  try {
-    const width = 1920;
-    const height = 1080;
+  raylib.clearBackground(BLACK);
+  raylib.beginDrawing();
 
-    window.initWindow(width, height, "Hello Raylib from Node.js");
+  raylib.beginMode3D(camera);
+  raylib.drawCube({ x: 0, y: 0, z: 0 }, 2.0, 2.0, 2.0, GREEN);
+  raylib.endMode3D();
 
-    const camera = {
-      position: { x: 5.0, y: 5.0, z: 5.0 },
-      target: { x: 0.0, y: 0.0, z: 0.0 },
-      up: { x: 0.0, y: 1.0, z: 0.0 },
-      fovy: 45.0,
-      projection: 0, // CAMERA_PERSPECTIVE
-    };
+  const text = "Hello from Node.js + Raylib";
+  const fontSize = 20;
+  const textWidth = raylib.measureText(text, fontSize);
 
-    await window.gameLoop(() => {
-      window.clearBackground(RaylibWindow.BLACK);
+  raylib.drawText(
+    text,
+    width / 2 - textWidth / 2,
+    height / 2 - fontSize / 2,
+    fontSize,
+    BLACK
+  );
 
-      window.beginMode3D(camera);
-      window.drawCube({ x: 0, y: 0, z: 0 }, 2.0, 2.0, 2.0, RaylibWindow.GREEN);
-      window.endMode3D();
-
-      const text = "Hello from Node.js + Raylib";
-      const fontSize = 20;
-      const textWidth = window.measureText(text, fontSize);
-
-      window.drawText(
-        text,
-        width / 2 - textWidth / 2,
-        height / 2 - fontSize / 2,
-        fontSize,
-        RaylibWindow.WHITE
-      );
-    });
-  } catch (error) {
-    console.error(`Runtime error: ${error.message}`);
-    if (window) {
-      try {
-        window.closeWindow();
-      } catch (closeError) {
-        console.error("Error closing window:", closeError.message);
-      }
-    }
-  }
+  raylib.endDrawing();
 }
 
-main().catch(console.error);
+raylib.closeWindow();
